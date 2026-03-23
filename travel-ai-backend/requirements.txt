@@ -4,4 +4,4 @@ gunicorn
 requests
 python-dotenv
 langgraph
-google-generativeai
+google-genai
