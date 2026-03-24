@@ -1,4 +1,4 @@
-import { Text, View, ScrollView, TouchableOpacity, Image } from "react-native";
+import { Text, View, ScrollView, TouchableOpacity, Image, ToastAndroid } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useMemo, use } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,9 +19,16 @@ export default function Hotels() {
 
     const fetchHotelfacilities = async () => {
       try {
+        setLoading(true);
+
+        if (!hotel_id) {
+          console.log("Hotel ID missing");
+          return;
+        }
+
         const response = await fetch(
-          `http://172.25.3.173:3000/api/hoteldetails/hotelfacilities?hotelid=${encodeURIComponent(
-            String(hotel_id)       // if not worked the use hotel_id directly without string conversion and encoding
+          `https://triparchitectai.onrender.com/api/hoteldetails/hotelfacilities?hotelid=${encodeURIComponent(
+            String(hotel_id)
           )}`,
           {
             method: "GET",
@@ -35,40 +42,55 @@ export default function Hotels() {
           throw new Error("Failed to fetch hotel facilities");
         }
 
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (err) {
+          throw new Error("Invalid JSON response");
+        }
+
         console.log("Backend response:", data);
 
-        // setHotelfacilities(data?.facilities || data || []);
-        const facilities = data?.facilities || data || [];
+        const facilities = data?.facilitie
+        if (!Array.isArray(facilities)) {
+          console.log("Facilities is not an array");
+          return;
+        }
+        const grouped = facilities.reduce((acc, item) => {
+          const category = item?.facilitytype_name || "Other";
 
-        const groupFacilities = (facilities: any[]) => {
-          return facilities.reduce((acc: any, item: any) => {
-            const category = item.facilitytype_name || "Other";
+          if (!acc[category]) acc[category] = [];
 
-            if (!acc[category]) {
-              acc[category] = [];
-            }
+          acc[category].push(item);
+          return acc;
+        }, {});
 
-            acc[category].push(item);
-            return acc;
-          }, {});
-        };
-
-        const grouped = groupFacilities(facilities);
         setHotelfacilities(grouped);
+
       } catch (error) {
         console.error("Error fetching facilities:", error);
+
+        ToastAndroid.show(
+          "Unable to load facilities. Try again.",
+          ToastAndroid.SHORT
+        );
+
       } finally {
         setLoading(false);
       }
     };
-
     fetchHotelfacilities();
 
     const fetchphotos = async () => {
       try {
+        if (!hotel_id) {
+          console.log("Hotel ID missing");
+          setHotelphotos([]);
+          return;
+        }
+
         const response = await fetch(
-          `http://172.25.3.173:3000/api/hoteldetails/hotelpics?hotelid=${encodeURIComponent(
+          `https://triparchitectai.onrender.com/api/hoteldetails/hotelpics?hotelid=${encodeURIComponent(
             String(hotel_id)
           )}`,
           {
@@ -83,13 +105,25 @@ export default function Hotels() {
           throw new Error("Failed to fetch hotel photos");
         }
 
-        const data = await response.json();
+        let data;
 
-        // Expecting: { hotelId, images: [...] }
-        setHotelphotos(Array.isArray(data?.images) ? data.images : []);
+        try {
+          data = await response.json();
+        } catch (err) {
+          throw new Error("Invalid JSON response");
+        }
+        const images = Array.isArray(data?.images) ? data.images : [];
+
+        setHotelphotos(images);
+
       } catch (error) {
         console.error("Error fetching hotel photos:", error);
-        setHotelphotos([]); // keep state safe
+        ToastAndroid.show(
+          "Unable to load photos. Try again.",
+          ToastAndroid.SHORT
+        );
+
+        setHotelphotos([]);
       }
     };
 
@@ -496,54 +530,82 @@ export default function Hotels() {
       try {
         setLoading(true);
 
-        const BASE_URL = "http://172.25.3.173:3000";
+        if (!hotel_id) {
+          console.log("Hotel ID missing");
+          setHotelfacilities({});
+          setHotelphotos([]);
+          return;
+        }
+
+        const BASE_URL = "https://triparchitectai.onrender.com";
 
         const [facilitiesRes, photosRes] = await Promise.all([
           fetch(
-            `${BASE_URL}/api/hoteldetails/hotelfacilities?hotelid=${hotel_id}`
+            `${BASE_URL}/api/hoteldetails/hotelfacilities?hotelid=${encodeURIComponent(
+              String(hotel_id)
+            )}`
           ),
           fetch(
-            `${BASE_URL}/api/hoteldetails/hotelpics?hotelid=${hotel_id}`
+            `${BASE_URL}/api/hoteldetails/hotelpics?hotelid=${encodeURIComponent(
+              String(hotel_id)
+            )}`
           ),
         ]);
 
         if (!facilitiesRes.ok) throw new Error("Facilities failed");
         if (!photosRes.ok) throw new Error("Photos failed");
+        let facilitiesData, photosData;
 
-        const facilitiesData = await facilitiesRes.json();
-        const photosData = await photosRes.json();
+        try {
+          facilitiesData = await facilitiesRes.json();
+          photosData = await photosRes.json();
+        } catch (err) {
+          throw new Error("Invalid JSON response");
+        }
 
-        // ✅ Make sure facilitiesData is array
-        let facilitiesArray: any[] = [];
+        // ================= FACILITIES =================
+        let facilitiesArray = [];
 
         if (Array.isArray(facilitiesData)) {
           facilitiesArray = facilitiesData;
         } else if (Array.isArray(facilitiesData?.facilities)) {
           facilitiesArray = facilitiesData.facilities;
         } else if (facilitiesData && typeof facilitiesData === "object") {
-          // Sometimes backend returns single object instead of array
           facilitiesArray = [facilitiesData];
         }
 
-        const grouped = facilitiesArray.reduce((acc: any, item: any) => {
-          const category = item.facilitytype_name || "Other";
+        if (!Array.isArray(facilitiesArray)) facilitiesArray = [];
+
+        const grouped = facilitiesArray.reduce((acc, item) => {
+          const category = item?.facilitytype_name || "Other";
+
           if (!acc[category]) acc[category] = [];
           acc[category].push(item);
+
           return acc;
         }, {});
 
         setHotelfacilities(grouped);
 
-        setHotelphotos(
-          Array.isArray(photosData?.images) ? photosData.images : []
-        );
+        // ================= PHOTOS =================
+        const images = Array.isArray(photosData?.images)
+          ? photosData.images
+          : [];
+
+        setHotelphotos(images);
 
       } catch (error) {
         console.error("Hotel details error:", error);
+        ToastAndroid.show(
+          "Failed to load hotel details. Try again.",
+          ToastAndroid.SHORT
+        );
+
         setHotelfacilities({});
         setHotelphotos([]);
+
       } finally {
-        setLoading(false);   // ✅ Only after BOTH finish
+        setLoading(false)
       }
     };
 

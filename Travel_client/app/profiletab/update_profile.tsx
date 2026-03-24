@@ -30,7 +30,7 @@ type UpdateBody = {
   Password?: string;
 };
 
-const BASE_URL = "http://172.25.3.173:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 function showToast(message: string) {
   if (Platform.OS === "android" && ToastAndroid) {
@@ -66,55 +66,75 @@ export default function UpdateProfileScreen() {
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
-    async function loadCurrent() {
-
-      const email = await AsyncStorage.getItem("userEmail");
-      if (!email) return;
-
+    const loadCurrent = async () => {
       try {
+        const email = await AsyncStorage.getItem("userEmail");
+
+        if (!email) {
+          console.log("No email found in storage");
+          return;
+        }
+
         const res = await fetch(
           `${BASE_URL}/user/userdetails?Email=${encodeURIComponent(email)}`,
           {
             method: "GET",
-            headers: { "content-type": "application/json" },
+            headers: { "Content-Type": "application/json" },
           }
         );
 
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch (err) {
+          throw new Error("Invalid server response");
+        }
 
-        if (res.ok && data?.details) {
+        if (!res.ok) {
+          console.log("Fetch failed:", data);
+          showToast("Failed to load profile");
+          return;
+        }
+
+        if (data?.details) {
           setDetails({
             Email: data.details.Email ?? "",
             Username: data.details.Username ?? "",
             Password: "",
           });
+        } else {
+          console.log("No user details found");
         }
 
       } catch (error) {
-        showToast("Could not load profile");
+        console.log("Profile load error:", error);
+        showToast("Server is waking up... try again");
       }
-    }
+    };
 
     loadCurrent();
   }, []);
 
   const verify = async () => {
-
     if (!verification.trim()) {
       showToast("Enter your password");
       return;
     }
 
-    const email = await AsyncStorage.getItem("userEmail");
-
-    setVerifying(true);
-
     try {
+      const email = await AsyncStorage.getItem("userEmail");
+
+      if (!email) {
+        showToast("User not found. Please login again.");
+        return;
+      }
+
+      setVerifying(true);
 
       const res = await fetch(`${BASE_URL}/user/verifyforupdate`, {
         method: "POST",
         headers: {
-          "content-type": "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           Email: email,
@@ -122,41 +142,71 @@ export default function UpdateProfileScreen() {
         }),
       });
 
-      const data = await res.json();
+      let data;
 
-      if (res.ok && data.success) {
+      try {
+        data = await res.json();
+      } catch (err) {
+        throw new Error("Invalid server response");
+      }
+
+      if (!res.ok) {
+        console.log("Verify failed:", data);
+        showToast(data?.msg || "Verification failed");
+        return;
+      }
+
+      if (data?.success) {
         setVerified(true);
+        showToast("Verified successfully ✅");
       } else {
-        showToast(data.msg || "Wrong password");
+        showToast(data?.msg || "Wrong password");
       }
 
     } catch (error) {
-      showToast("Verification failed");
+      console.log("Verification error:", error);
+      showToast("Server is waking up... try again");
     } finally {
       setVerifying(false);
     }
   };
 
   const update = async () => {
-
     if (!verified) {
       showToast("Verify your password first");
       return;
     }
 
-    setLoading(true);
+    if (loading) return;
 
     try {
-
       const oldEmail = await AsyncStorage.getItem("userEmail");
 
+      if (!oldEmail) {
+        showToast("Session expired. Please login again.");
+        return;
+      }
+
+      const newEmail = details.Email?.trim() || "";
+      const username = details.Username?.trim() || "";
+
+      if (!newEmail || !username) {
+        showToast("Email and Username are required");
+        return;
+      }
+
+      setLoading(true);
+
+      const password = details.Password?.trim();
+
       const bodyData: UpdateBody = {
-        oldEmail: oldEmail,
-        newEmail: details.Email.trim(),
-        Username: details.Username.trim(),
+        oldEmail,
+        newEmail,
+        Username: username,
+        ...(password ? { Password: password } : {}),
       };
 
-      // send password only if user typed it
+      // ✅ include password only if provided
       if (details.Password && details.Password.trim() !== "") {
         bodyData.Password = details.Password.trim();
       }
@@ -164,29 +214,39 @@ export default function UpdateProfileScreen() {
       const res = await fetch(`${BASE_URL}/user/updateprofile`, {
         method: "POST",
         headers: {
-          "content-type": "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(bodyData),
       });
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        throw new Error("Invalid server response");
+      }
 
-      if (res.ok && data.success) {
+      if (!res.ok) {
+        console.log("Update failed:", data);
+        showToast(data?.msg || "Update failed");
+        return;
+      }
 
-        if (oldEmail !== details.Email.trim()) {
-          await AsyncStorage.setItem("userEmail", details.Email.trim());
+      if (data?.success) {
+        if (oldEmail !== newEmail) {
+          await AsyncStorage.setItem("userEmail", newEmail);
         }
 
-        showToast("Profile updated");
+        showToast("Profile updated successfully ✅");
 
         router.replace("/tabs/profile");
-
       } else {
-        showToast(data.msg || "Update failed");
+        showToast(data?.msg || "Update failed");
       }
 
     } catch (error) {
-      showToast("Update failed");
+      console.log("Update error:", error);
+      showToast("Server is waking up... try again");
     } finally {
       setLoading(false);
     }

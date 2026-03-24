@@ -10,29 +10,61 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     console.log("Login attempted:", { email, password });
-    const response = await fetch("http://172.25.0.52:3000/user/userlogin", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        Email: email,
-        Password: password
-      })
-    });
-    const data = await response.json();
-    if (response.ok) {
+
+    if (!email || !password) {
+      ToastAndroid.show("Email and Password required", ToastAndroid.SHORT);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        "https://triparchitectai.onrender.com/user/userlogin",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            Email: email,
+            Password: password,
+          }),
+        }
+      );
+
+      let data;
+
+      try {
+        data = await response.json();
+      } catch (err) {
+        throw new Error("Invalid server response");
+      }
+
+      if (!response.ok) {
+        console.log("Login failed:", data);
+
+        ToastAndroid.show(
+          data?.msg || "Invalid email or password",
+          ToastAndroid.SHORT
+        );
+        return;
+      }
+
       await AsyncStorage.setItem("userEmail", email);
-      await AsyncStorage.setItem("userId", data?.user?._id);
+      await AsyncStorage.setItem("userId", data?.user?._id || "");
+
+      ToastAndroid.show("Login Successful 🎉", ToastAndroid.SHORT);
+
       router.push({
         pathname: "/tabs/home_screen",
-        params: {
-          email
-        },
-      } as any);
-    } else {
-      ToastAndroid.show("Enter valid credentials", ToastAndroid.SHORT);
-      return;
+        params: { email },
+      });
+
+    } catch (error) {
+      console.log("Login error:", error);
+      ToastAndroid.show(
+        "Server is waking up... try again",
+        ToastAndroid.SHORT
+      );
     }
   };
 

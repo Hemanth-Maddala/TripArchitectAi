@@ -40,7 +40,7 @@ export default function PlanningResultScreen() {
   const [savedId, setSavedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("home");
 
-  const BASE_URL = "http://172.25.0.52:3000";
+  const BASE_URL = "https://triparchitectai.onrender.com";
   const handleTabPress = (tab: string, route: string) => {
     setActiveTab(tab);
     router.push(route as any);
@@ -54,82 +54,106 @@ export default function PlanningResultScreen() {
 
   useEffect(() => {
     const fetchAllData = async () => {
-      const parsedDates = JSON.parse(travelDates as string);
       try {
         setIsLoading(true);
 
-        // ========= AI PLAN =========
-        const response = await fetch(`${BASE_URL}/api/ai/generate-text`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destination_input: destination,
-            starting_location: startingLocation || "Delhi",
-            budget_input: Number(budget),
-            travel_dates: travelDates,
-            members: Number(people),
-            month_input: getMonth(new Date(parsedDates.startDate)),
-          }),
-        });
+        const parsedDates = JSON.parse(travelDates as string);
 
-        const data_det = await response.json();
+        // ================= AI PLAN =================
+        let data_det;
 
-        setPlanData(data_det);
-        setWeather(data_det?.weather);
-        setEvent(data_det?.event);
-
-        // ========= HOTELS =========
-        const place = destination;
-        const guests = Number(people) || 2;
-
-        const hotelRes = await fetch(
-          `${BASE_URL}/api/hotels/search?place=${encodeURIComponent(
-            place as string
-          )}&guests=${guests}`
-        );
-
-        if (!hotelRes.ok) throw new Error("Failed to fetch hotels");
-
-        const hotelJson = await hotelRes.json();
-        const hoteldata = hotelJson?.hotels || [];
-
-        const formattedHotels = hoteldata.map((hotel: any) => ({
-          ...hotel,
-          image: hotel.image
-            ? hotel.image.replace("square60", "square300")
-            : null,
-        }));
-
-        setHotelsData(formattedHotels);
-
-        // ========= SAVE TRIP =========
-        const userId = await AsyncStorage.getItem("userId");
-
-        if (userId) {
-          await fetch(`${BASE_URL}/trip/savetrip`, {
+        try {
+          const response = await fetch(`${BASE_URL}/api/ai/generate-text`, {
             method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              userId,
-              StartingLocation: {
-                starting_location: data_det?.starting_location,
-                budget_input: data_det?.budget_input,
-                travel_dates: data_det?.travel_dates,
-                members: data_det?.members,
-              },
-              DestinationLocation: destination,
-              HighlightDetails: data_det?.highlight_images,
-              Itinerary: data_det?.itinerary,
-              HotelsData: formattedHotels,
-              Weather: data_det?.weather,
-              Event: data_det?.event,
+              destination_input: destination,
+              starting_location: startingLocation || "Delhi",
+              budget_input: Number(budget),
+              travel_dates: travelDates,
+              members: Number(people),
+              month_input: getMonth(new Date(parsedDates.startDate)),
             }),
           });
+
+          if (!response.ok) {
+            throw new Error("AI request failed");
+          }
+
+          data_det = await response.json();
+
+          setPlanData(data_det);
+          setWeather(data_det?.weather);
+          setEvent(data_det?.event);
+
+        } catch (err) {
+          console.log("AI error:", err);
+          throw new Error("AI service unavailable");
         }
+
+        // ================= HOTELS =================
+        let formattedHotels = [];
+
+        try {
+          const place = String(destination);
+          const guests = Number(people) || 2;
+
+          const hotelRes = await fetch(
+            `${BASE_URL}/api/hotels/search?place=${encodeURIComponent(place)}&guests=${guests}`
+          );
+
+          if (!hotelRes.ok) throw new Error("Failed to fetch hotels");
+
+          const hotelJson = await hotelRes.json();
+          const hoteldata = hotelJson?.hotels || [];
+
+          formattedHotels = hoteldata.map((hotel: any) => ({
+            ...hotel,
+            image: hotel.image
+              ? hotel.image.replace("square60", "square300")
+              : null,
+          }));
+
+          setHotelsData(formattedHotels);
+
+        } catch (err) {
+          console.log("Hotels error:", err);
+        }
+
+        // ================= SAVE TRIP =================
+        try {
+          const userId = await AsyncStorage.getItem("userId");
+
+          if (userId && data_det) {
+            await fetch(`${BASE_URL}/trip/savetrip`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userId,
+                StartingLocation: {
+                  starting_location: data_det?.starting_location,
+                  budget_input: data_det?.budget_input,
+                  travel_dates: data_det?.travel_dates,
+                  members: data_det?.members,
+                },
+                DestinationLocation: destination,
+                HighlightDetails: data_det?.highlight_images,
+                Itinerary: data_det?.itinerary,
+                HotelsData: formattedHotels,
+                Weather: data_det?.weather,
+                Event: data_det?.event,
+              }),
+            });
+          }
+
+        } catch (err) {
+          console.log("Save trip error:", err);
+        }
+
       } catch (error) {
-        console.log("Error fetching data:", error);
+        console.log("Main flow error:", error);
       } finally {
         setIsLoading(false);
       }

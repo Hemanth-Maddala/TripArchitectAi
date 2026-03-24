@@ -21,7 +21,7 @@ type Trip = {
   createdAt?: string;
 };
 
-const BASE_URL = "http://172.25.0.52:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 export default function TripHistoryScreen() {
   const router = useRouter();
@@ -38,36 +38,69 @@ export default function TripHistoryScreen() {
   const contentPaddingBottom = bottomNavHeightEstimate + insets.bottom;
   const bottomIconClass = isSmall ? "w-7 h-7" : "w-8 h-8";
 
-    const handleTabPress = (tab: string, route: string) => {
-        setActiveTab(tab);
-        router.push(route as any);
-    };
+  const handleTabPress = (tab: string, route: string) => {
+    setActiveTab(tab);
+    router.push(route as any);
+  };
 
   useEffect(() => {
-    const tab = (params.tab as string)
-    setActiveTab(tab);
-    async function getTrips() {
-      try {
-        const userId = await AsyncStorage.getItem("userId");
+    const tab = Array.isArray(params?.tab)
+      ? params.tab[0]
+      : params?.tab;
 
-        const res = await fetch(`${BASE_URL}/trip/gettrip/${userId}`);
-        const data = await res.json();
-
-        if (res.ok) {
-          setTrips(data.data || []);
-        }
-        console.log(data);
-      } catch (err) {
-        console.log("Error loading trips:", err);
-      }
-
-      setLoading(false);
+    if (tab) {
+      setActiveTab(tab);
     }
 
+    const getTrips = async () => {
+      try {
+        setLoading(true);
+
+        const userId = await AsyncStorage.getItem("userId");
+
+        if (!userId) {
+          console.log("No userId found");
+          setTrips([]);
+          return;
+        }
+
+        const res = await fetch(
+          `${BASE_URL}/trip/gettrip/${encodeURIComponent(userId)}`
+        );
+
+        let data;
+
+        // ✅ Safe JSON parsing
+        try {
+          data = await res.json();
+        } catch (err) {
+          throw new Error("Invalid server response");
+        }
+
+        if (!res.ok) {
+          console.log("Fetch failed:", data);
+          return;
+        }
+
+        const trips = Array.isArray(data?.data) ? data.data : [];
+
+        setTrips(trips);
+
+        console.log("Trips:", trips);
+
+      } catch (err) {
+        console.log("Error loading trips:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     getTrips();
-  }, []);
+  }, [params?.tab]);
 
   const handleDeleteTrip = (tripId: string) => {
+    if (!tripId) return;
+
     Alert.alert("Delete Trip", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -75,16 +108,34 @@ export default function TripHistoryScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            const res = await fetch(`${BASE_URL}/trip/deleteTrip/${tripId}`, {
-              method: "DELETE",
-            });
+            const res = await fetch(
+              `${BASE_URL}/trip/deleteTrip/${encodeURIComponent(tripId)}`,
+              {
+                method: "DELETE",
+              }
+            );
 
-            if (!res.ok) throw new Error();
+            let data;
 
+            try {
+              data = await res.json();
+            } catch {
+              data = null;
+            }
+
+            if (!res.ok) {
+              console.log("Delete failed:", data);
+              throw new Error("Delete failed");
+            }
             setTrips((prev) => prev.filter((t) => t._id !== tripId));
+
           } catch (err) {
-            console.log(err);
-            Alert.alert("Error", "Failed to delete trip");
+            console.log("Delete error:", err);
+
+            Alert.alert(
+              "Error",
+              "Failed to delete trip. Please try again."
+            );
           }
         },
       },

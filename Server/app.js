@@ -10,7 +10,11 @@ const app = express()
 const cors = require('cors');
 connectDb();
 
-app.use(cors());
+app.use(cors({
+  origin: "*", // for mobile apps (Expo)
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 app.use(express.json())
 
 app.get('/', (req, res) => {
@@ -71,7 +75,9 @@ app.use("/user",require("./routes/userRoute.js"));
 app.use("/trip",require("./routes/tripRoute.js"));
 app.use("/like",require("./routes/likedRoute.js"));
 
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on port 3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
 

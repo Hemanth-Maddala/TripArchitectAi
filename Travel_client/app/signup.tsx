@@ -8,34 +8,65 @@ export default function LoginScreen() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const router = useRouter();
-    
+
 
     const handleLogin = async () => {
         console.log("Login attempted:", { username, email, password });
-        const response = await fetch("http://172.25.0.52:3000/user/useraccount", {
-            method: "POST",
-            headers: {
-                "content-type": "application/json"
-            },
-            body: JSON.stringify({
-                Username: username,
-                Email: email,
-                Password: password
-            })
-        });
-        const data = await response.json();
-        if (response.ok) {
+
+        if (!email || !password) {
+            ToastAndroid.show("Email and Password required", ToastAndroid.SHORT);
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                "https://triparchitectai.onrender.com/user/useraccount",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        Username: username,
+                        Email: email,
+                        Password: password,
+                    }),
+                }
+            );
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (err) {
+                throw new Error("Invalid server response");
+            }
+
+            if (!response.ok) {
+                console.log("Server error:", data);
+                ToastAndroid.show(
+                    data?.msg || "Enter valid details or use unique email",
+                    ToastAndroid.SHORT
+                );
+                return;
+            }
+
             await AsyncStorage.setItem("userEmail", email);
-            await AsyncStorage.setItem("userId", data?.user?._id);
+            await AsyncStorage.setItem("userId", data?.user?._id || "");
+
+            ToastAndroid.show("Login Successful 🎉", ToastAndroid.SHORT);
+
             router.push({
                 pathname: "/tabs/home_screen",
-                params: {
-                    email
-                },
-            } as any);
-        } else {
-            ToastAndroid.show("Enter valid details or Unique Email", ToastAndroid.SHORT);
-            return;
+                params: { email },
+            });
+
+        } catch (error) {
+            console.log("Login error:", error);
+
+            ToastAndroid.show(
+                "Server is waking up... try again in a few seconds",
+                ToastAndroid.SHORT
+            );
         }
     };
 

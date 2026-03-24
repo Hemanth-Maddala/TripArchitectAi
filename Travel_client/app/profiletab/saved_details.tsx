@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useMemo } from "react";
 
-const BASE_URL = "http://172.25.0.52:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 export default function TripDetailsScreen() {
   const params = useLocalSearchParams();
@@ -29,26 +29,54 @@ export default function TripDetailsScreen() {
   };
 
   useEffect(() => {
-    console.log("hello")
     const fetchTrip = async () => {
       try {
+        console.log("Fetching trip...");
+
         const saveId = Array.isArray(params.saveId)
           ? params.saveId[0]
           : params.saveId;
+
         console.log("RAW PARAM:", params.saveId);
         console.log("FINAL SAVE ID:", saveId);
-        if (!saveId) return;
-        const res = await fetch(`${BASE_URL}/like/getSingleTrip/${saveId}`);
-        const data = await res.json();
-        if (res.ok) {
-          setSaved(data.data);
+
+        if (!saveId) {
+          console.log("No saveId found");
+          return;
         }
+
+        setLoading(true);
+
+        const res = await fetch(
+          `${BASE_URL}/like/getSingleTrip/${encodeURIComponent(saveId)}`
+        );
+
+        let data;
+
+        try {
+          data = await res.json();
+        } catch (err) {
+          throw new Error("Invalid server response");
+        }
+
+        if (!res.ok) {
+          console.log("Fetch failed:", data);
+          return;
+        }
+
+        if (data?.data) {
+          setSaved(data.data);
+        } else {
+          console.log("No trip data found");
+        }
+
       } catch (e) {
         console.log("Error fetching trip:", e);
       } finally {
         setLoading(false);
       }
     };
+
     fetchTrip();
   }, [params.saveId]);
 

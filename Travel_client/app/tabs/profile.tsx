@@ -80,20 +80,47 @@ export default function ProfileScreen() {
     ];
 
     useEffect(() => {
-        async function det() {
-            let email = await AsyncStorage.getItem("userEmail");
-            const res = await fetch(`http://172.25.0.52:3000/user/userdetails?Email=${email}`, {
-                method: "GET",
-                headers: {
-                    "content-type": "application/json"
-                }
-            })
+        const fetchDetails = async () => {
+            try {
+                const email = await AsyncStorage.getItem("userEmail");
 
-            const data = await res.json();
-            setdetails(data.details);
-        }
-        det();
-    }, [])
+                if (!email) {
+                    console.log("No email found in storage");
+                    return;
+                }
+
+                const res = await fetch(
+                    `https://triparchitectai.onrender.com/user/userdetails?Email=${email}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+
+                let data;
+
+                try {
+                    data = await res.json();
+                } catch (err) {
+                    throw new Error("Invalid server response");
+                }
+
+                if (!res.ok) {
+                    console.log("Fetch failed:", data);
+                    return;
+                }
+
+                setdetails(data?.details || {});
+
+            } catch (error) {
+                console.log("Error fetching user details:", error);
+            }
+        };
+
+        fetchDetails();
+    }, []);
 
     return (
         <View className="flex-1 bg-white">

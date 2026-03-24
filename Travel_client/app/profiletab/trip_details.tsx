@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useMemo } from "react";
 
-const BASE_URL = "http://172.25.0.52:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 export default function TripDetailsScreen() {
   const params = useLocalSearchParams();
@@ -31,20 +31,49 @@ export default function TripDetailsScreen() {
   useEffect(() => {
     const fetchTrip = async () => {
       try {
-        if (!params?.tripId) return;
-        const res = await fetch(`${BASE_URL}/trip/getSingleTrip/${params.tripId}`);
-        const data = await res.json();
-        if (res.ok) {
-          setTrip(data.data);
+        const tripId = Array.isArray(params?.tripId)
+          ? params.tripId[0]
+          : params?.tripId;
+
+        if (!tripId) {
+          console.log("No tripId found");
+          return;
         }
+
+        setLoading(true);
+
+        const res = await fetch(
+          `${BASE_URL}/trip/getSingleTrip/${encodeURIComponent(tripId)}`
+        );
+
+        let data;
+
+        try {
+          data = await res.json();
+        } catch (err) {
+          throw new Error("Invalid server response");
+        }
+
+        if (!res.ok) {
+          console.log("Fetch failed:", data);
+          return;
+        }
+
+        if (data?.data) {
+          setTrip(data.data);
+        } else {
+          console.log("No trip data found");
+        }
+
       } catch (e) {
         console.log("Error fetching trip:", e);
       } finally {
         setLoading(false);
       }
     };
+
     fetchTrip();
-  }, [params.tripId]);
+  }, [params?.tripId]);
 
   // ✅ PARSE TRIP SUMMARY DATA
   const details = useMemo(() => {
@@ -265,7 +294,7 @@ export default function TripDetailsScreen() {
                 <Text className="ml-2 text-lg font-bold text-teal-900">Weather & Packing</Text>
               </View>
               <Text className="text-xs text-slate-700 leading-5 mb-4">{weather.current_weather}</Text>
-              
+
               <Text className="text-sm font-bold text-pink-900 uppercase mb-2 tracking-wider">Travel Advices</Text>
               {Array.isArray(weather.advice) && weather.advice.map((tip: string, i: number) => (
                 <View key={i} className="flex-row items-start mb-2">

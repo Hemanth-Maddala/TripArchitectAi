@@ -21,7 +21,7 @@ type Saved = {
   createdAt?: string;
 };
 
-const BASE_URL = "http://172.25.0.52:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 export default function TripHistoryScreen() {
   const router = useRouter();
@@ -37,34 +37,58 @@ export default function TripHistoryScreen() {
   const contentPaddingBottom = bottomNavHeightEstimate + insets.bottom;
   const bottomIconClass = isSmall ? "w-7 h-7" : "w-8 h-8";
 
-    const handleTabPress = (tab: string, route: string) => {
-        setActiveTab(tab);
-        router.push(route as any);
-    };
+  const handleTabPress = (tab: string, route: string) => {
+    setActiveTab(tab);
+    router.push(route as any);
+  };
 
   useEffect(() => {
-    async function getTrips() {
+    const getTrips = async () => {
       try {
+        setLoading(true);
+
         const userId = await AsyncStorage.getItem("userId");
 
-        const res = await fetch(`${BASE_URL}/like/getliked/${userId}`);
-        const data = await res.json();
-
-        if (res.ok) {
-          setSaved(data.data || []);
+        if (!userId) {
+          console.log("No userId found");
+          setSaved([]);
+          return;
         }
-        console.log(data);
+
+        const res = await fetch(
+          `${BASE_URL}/like/getliked/${encodeURIComponent(userId)}`
+        );
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (err) {
+          throw new Error("Invalid server response");
+        }
+
+        if (!res.ok) {
+          console.log("Fetch failed:", data);
+          return;
+        }
+        const trips = Array.isArray(data?.data) ? data.data : [];
+
+        setSaved(trips);
+
+        console.log("Trips:", trips);
+
       } catch (err) {
         console.log("Error loading trips:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
-    }
+    };
 
     getTrips();
   }, []);
 
   const handleDeleteTrip = (tripId: string) => {
+    if (!tripId) return;
+
     Alert.alert("Unsave Trip", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -72,16 +96,33 @@ export default function TripHistoryScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            const res = await fetch(`${BASE_URL}/like/unsaveTrip/${tripId}`, {
-              method: "DELETE",
-            });
+            const res = await fetch(
+              `${BASE_URL}/like/unsaveTrip/${encodeURIComponent(tripId)}`,
+              {
+                method: "DELETE",
+              }
+            );
 
-            if (!res.ok) throw new Error();
+            let data;
+            try {
+              data = await res.json();
+            } catch {
+              data = null;
+            }
 
+            if (!res.ok) {
+              console.log("Delete failed:", data);
+              throw new Error("Delete failed");
+            }
             setSaved((prev) => prev.filter((t) => t._id !== tripId));
+
           } catch (err) {
-            console.log(err);
-            Alert.alert("Error", "Failed to Unsave trip");
+            console.log("Delete error:", err);
+
+            Alert.alert(
+              "Error",
+              "Failed to unsave trip. Please try again."
+            );
           }
         },
       },

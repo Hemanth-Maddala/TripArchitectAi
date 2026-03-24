@@ -9,8 +9,8 @@ import {
     TouchableOpacity,
     ToastAndroid,
     View,
-  Image,
-  useWindowDimensions
+    Image,
+    useWindowDimensions
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -18,7 +18,7 @@ import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL = "http://172.25.0.52:3000";
+const BASE_URL = "https://triparchitectai.onrender.com";
 
 export default function CustomerSupportScreen() {
     const [subject, setSubject] = useState("");
@@ -47,6 +47,8 @@ export default function CustomerSupportScreen() {
     };
 
     const sendMail = async () => {
+        if (sending) return;
+
         try {
             const fromEmail = await AsyncStorage.getItem("userEmail");
 
@@ -55,7 +57,10 @@ export default function CustomerSupportScreen() {
                 return;
             }
 
-            if (!subject.trim() || !message.trim()) {
+            const trimmedSubject = subject.trim();
+            const trimmedMessage = message.trim();
+
+            if (!trimmedSubject || !trimmedMessage) {
                 showMessage("Please fill in both subject and message.");
                 return;
             }
@@ -67,23 +72,41 @@ export default function CustomerSupportScreen() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     from: fromEmail,
-                    subject: subject.trim(),
-                    message: message.trim(),
+                    subject: trimmedSubject,
+                    message: trimmedMessage,
                 }),
             });
 
-            const data = await res.json().catch(() => null);
+            let data;
+            try {
+                data = await res.json();
+            } catch (err) {
+                throw new Error("Invalid server response");
+            }
 
-            if (res.ok && data?.success) {
+            if (!res.ok) {
+                console.log("Send mail failed:", data);
+                showMessage(data?.msg || "Server error. Please try again later.");
+                return;
+            }
+
+            if (data?.success) {
                 setSubject("");
                 setMessage("");
+
                 showMessage("Message sent! We'll reply to your email soon. ✅");
-                setTimeout(() => router.back(), 2000);
+
+                setTimeout(() => {
+                    router.back();
+                }, 1500);
+
             } else {
-                showMessage(data?.msg || "Server error. Please try again later.");
+                showMessage(data?.msg || "Failed to send message.");
             }
+
         } catch (err) {
-            showMessage("Connection failed. Is your server running?");
+            console.log("Send mail error:", err);
+            showMessage("Server is waking up... please try again.");
         } finally {
             setSending(false);
         }
@@ -115,7 +138,7 @@ export default function CustomerSupportScreen() {
                 <ScrollView
                     className="flex-1 px-5"
                     showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
+                    contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
                 >
                     {/* INSTRUCTION CARD */}
                     <View className="bg-yellow-500 rounded-3xl p-6 mt-6 shadow-lg shadow-teal-200">
