@@ -52,20 +52,138 @@ export default function PlanningResultScreen() {
     });
   };
 
+  // useEffect(() => {
+  //   const fetchAllData = async () => {
+  //     try {
+  //       setIsLoading(true);
+
+  //       const parsedDates = JSON.parse(travelDates as string);
+
+  //       // ================= AI PLAN =================
+  //       let data_det;
+
+  //       try {
+  //         const response = await fetch(`${BASE_URL}/api/ai/generate-text`, {
+  //           method: "POST",
+  //           headers: { "Content-Type": "application/json" },
+  //           body: JSON.stringify({
+  //             destination_input: destination,
+  //             starting_location: startingLocation || "Delhi",
+  //             budget_input: Number(budget),
+  //             travel_dates: travelDates,
+  //             members: Number(people),
+  //             month_input: getMonth(new Date(parsedDates.startDate)),
+  //           }),
+  //         });
+
+  //         if (!response.ok) {
+  //           throw new Error("AI request failed");
+  //         }
+
+  //         data_det = await response.json();
+
+  //         setPlanData(data_det);
+  //         setWeather(data_det?.weather);
+  //         setEvent(data_det?.event);
+
+  //       } catch (err) {
+  //         console.log("AI error:", err);
+  //         throw new Error("AI service unavailable");
+  //       }
+
+  //       // ================= HOTELS =================
+  //       let formattedHotels = [];
+
+  //       try {
+  //         const place = String(destination);
+  //         const guests = Number(people) || 2;
+
+  //         const hotelRes = await fetch(
+  //           `${BASE_URL}/api/hotels/search?place=${encodeURIComponent(place)}&guests=${guests}`
+  //         );
+
+  //         if (!hotelRes.ok) throw new Error("Failed to fetch hotels");
+
+  //         const hotelJson = await hotelRes.json();
+  //         const hoteldata = hotelJson?.hotels || [];
+
+  //         formattedHotels = hoteldata.map((hotel: any) => ({
+  //           ...hotel,
+  //           image: hotel.image
+  //             ? hotel.image.replace("square60", "square300")
+  //             : null,
+  //         }));
+
+  //         setHotelsData(formattedHotels);
+
+  //       } catch (err) {
+  //         console.log("Hotels error:", err);
+  //       }
+
+  //       // ================= SAVE TRIP =================
+  //       try {
+  //         const userId = await AsyncStorage.getItem("userId");
+
+  //         if (userId && data_det) {
+  //           await fetch(`${BASE_URL}/trip/savetrip`, {
+  //             method: "POST",
+  //             headers: {
+  //               "Content-Type": "application/json",
+  //             },
+  //             body: JSON.stringify({
+  //               userId,
+  //               StartingLocation: {
+  //                 starting_location: data_det?.starting_location,
+  //                 budget_input: data_det?.budget_input,
+  //                 travel_dates: data_det?.travel_dates,
+  //                 members: data_det?.members,
+  //               },
+  //               DestinationLocation: destination,
+  //               HighlightDetails: data_det?.highlight_images,
+  //               Itinerary: data_det?.itinerary,
+  //               HotelsData: formattedHotels,
+  //               Weather: data_det?.weather,
+  //               Event: data_det?.event,
+  //             }),
+  //           });
+  //         }
+
+  //       } catch (err) {
+  //         console.log("Save trip error:", err);
+  //       }
+
+  //     } catch (error) {
+  //       console.log("Main flow error:", error);
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   };
+
+  //   fetchAllData();
+  // }, []);
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
 
-        const parsedDates = JSON.parse(travelDates as string);
+        const parsedDates =
+          typeof travelDates === "string"
+            ? JSON.parse(travelDates)
+            : travelDates;
+
+        let data_det: any;
+        let formattedHotels: any[] = [];
 
         // ================= AI PLAN =================
-        let data_det;
-
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
           const response = await fetch(`${BASE_URL}/api/ai/generate-text`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
             body: JSON.stringify({
               destination_input: destination,
               starting_location: startingLocation || "Delhi",
@@ -76,9 +194,9 @@ export default function PlanningResultScreen() {
             }),
           });
 
-          if (!response.ok) {
-            throw new Error("AI request failed");
-          }
+          clearTimeout(timeoutId);
+
+          if (!response.ok) throw new Error("AI request failed");
 
           data_det = await response.json();
 
@@ -86,23 +204,32 @@ export default function PlanningResultScreen() {
           setWeather(data_det?.weather);
           setEvent(data_det?.event);
 
-        } catch (err) {
+        } catch (err: any) {
+          if (err?.name === "AbortError") {
+            console.log("AI request timed out");
+            throw new Error("AI service timed out");
+          }
+
           console.log("AI error:", err);
           throw new Error("AI service unavailable");
         }
 
         // ================= HOTELS =================
-        let formattedHotels = [];
-
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+
           const place = String(destination);
           const guests = Number(people) || 2;
 
           const hotelRes = await fetch(
-            `${BASE_URL}/api/hotels/search?place=${encodeURIComponent(place)}&guests=${guests}`
+            `${BASE_URL}/api/hotels/search?place=${encodeURIComponent(place)}&guests=${guests}`,
+            { signal: controller.signal }
           );
 
-          if (!hotelRes.ok) throw new Error("Failed to fetch hotels");
+          clearTimeout(timeoutId);
+
+          if (!hotelRes.ok) throw new Error("Hotels failed");
 
           const hotelJson = await hotelRes.json();
           const hoteldata = hotelJson?.hotels || [];
@@ -116,7 +243,10 @@ export default function PlanningResultScreen() {
 
           setHotelsData(formattedHotels);
 
-        } catch (err) {
+        } catch (err: any) {
+          if (err?.name === "AbortError") {
+            console.log("Hotels request timed out");
+          }
           console.log("Hotels error:", err);
         }
 
