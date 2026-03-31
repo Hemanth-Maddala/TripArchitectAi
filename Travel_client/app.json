@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "travelclient",
     "userInterfaceStyle": "automatic",
-    "usesCleartextTraffic": true,
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
@@ -33,6 +32,15 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "981ab422-bc83-4e15-95c2-b8c5310208f4"
+      }
+    },
+    "android": {
+      "package": "com.maddalahemanth.triparchitectai"
     }
   }
 }
