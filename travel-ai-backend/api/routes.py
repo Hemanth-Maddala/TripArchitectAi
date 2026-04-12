@@ -4,6 +4,11 @@ from planner.graph import build_planner_graph
 router = APIRouter()
 planner = build_planner_graph()
 
+@router.get("/")
+async def health_check():
+    return {"status": "ok"}
+
+
 @router.post("/plan-trip")
 async def plan_trip(user_input: dict):
     # user_raw_data = {
